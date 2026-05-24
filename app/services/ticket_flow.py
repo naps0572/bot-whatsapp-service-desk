@@ -7,6 +7,19 @@ from app.services.openrouter import OpenRouterClient
 
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+PROBLEM_WORDS = {
+    "no funciona",
+    "error",
+    "caido",
+    "caído",
+    "falla",
+    "problema",
+    "necesito",
+    "solicito",
+    "acceso",
+    "instalar",
+    "crear usuario",
+}
 
 
 class TicketFlow:
@@ -41,6 +54,34 @@ class TicketFlow:
 
         if lowered in {"si", "sí", "confirmo", "crear", "ok", "dale", "correcto"}:
             data["confirmed"] = True
+            return TicketDraft.model_validate(data)
+
+        if not data["requester_name"] and self._is_likely_name(text, lowered):
+            data["requester_name"] = text.strip()
+            return TicketDraft.model_validate(data)
+
+        if not data["impact_scope"]:
+            if any(word in lowered for word in ["solo yo", "solo a mi", "solo a mí", "a mi", "a mí", "un usuario"]):
+                data["impact_scope"] = "Afecta a un usuario"
+            elif any(word in lowered for word in ["varios", "muchos", "equipo", "area", "área"]):
+                data["impact_scope"] = "Afecta a varios usuarios"
+            elif any(word in lowered for word in ["todos", "empresa", "general"]):
+                data["impact_scope"] = "Afecta a toda la empresa"
+
+        if not data["can_work"]:
+            if "no puedo trabajar" in lowered or "no puedo seguir" in lowered:
+                data["can_work"] = "No puede trabajar"
+            if "puedo trabajar" in lowered or "puedo seguir" in lowered:
+                data["can_work"] = "Puede trabajar con alternativa"
+
+        if (
+            not data["since_when"]
+            and data["ticket_type"] == "incidente"
+            and data["requester_email"]
+            and self._is_likely_time_answer(lowered)
+        ):
+            data["since_when"] = text.strip()
+            return TicketDraft.model_validate(data)
 
         if data["ticket_type"] == "desconocido":
             if any(word in lowered for word in ["no funciona", "error", "caido", "caído", "falla", "problema"]):
@@ -136,3 +177,39 @@ class TicketFlow:
             "Responde 'sí' para crearlo o escribe la corrección."
         )
 
+    def _is_likely_name(self, text: str, lowered: str) -> bool:
+        clean = text.strip()
+        if len(clean) < 3 or len(clean) > 80:
+            return False
+        if EMAIL_RE.search(clean):
+            return False
+        if any(word in lowered for word in PROBLEM_WORDS):
+            return False
+        if lowered in {"hola", "buenas", "buenos dias", "buenos días", "buenas tardes", "buenas noches"}:
+            return False
+        if any(word in lowered for word in ["solo", "varios", "todos", "empresa", "area", "área"]):
+            return False
+        return bool(re.fullmatch(r"[a-zA-ZÀ-ÿ' ]+", clean)) and len(clean.split()) >= 2
+
+    def _is_likely_time_answer(self, lowered: str) -> bool:
+        return any(
+            word in lowered
+            for word in [
+                "hoy",
+                "ayer",
+                "mañana",
+                "manana",
+                "semana",
+                "desde",
+                "hora",
+                "minuto",
+                "dias",
+                "días",
+                "lunes",
+                "martes",
+                "miercoles",
+                "miércoles",
+                "jueves",
+                "viernes",
+            ]
+        )
