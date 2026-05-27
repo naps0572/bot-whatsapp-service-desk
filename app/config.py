@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     twilio_from_whatsapp: str = ""
     test_user_whatsapp: str = ""
 
+    service_desk_api_url: str = ""
+    service_desk_api_key: str = Field(default="", repr=False)
+
 
 @lru_cache
 def get_settings() -> Settings:

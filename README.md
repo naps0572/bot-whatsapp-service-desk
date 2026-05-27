@@ -16,6 +16,7 @@ Incluye dos formas de ejecucion:
 - Calculo basico de prioridad.
 - SQLite local para FastAPI.
 - Netlify Blobs para produccion en Netlify.
+- Integracion opcional con `Proyecto_Final_DWJ` para crear tickets reales.
 - Endpoints de prueba sin WhatsApp.
 
 ## Estructura
@@ -124,6 +125,8 @@ WHATSAPP_PROVIDER=twilio
 TWILIO_ACCOUNT_SID=tu_account_sid
 TWILIO_AUTH_TOKEN=tu_auth_token
 TWILIO_FROM_WHATSAPP=whatsapp:+14155238886
+SERVICE_DESK_API_URL=https://tu-backend.com/api
+SERVICE_DESK_API_KEY=el_mismo_valor_de_SERVICE_BOT_API_KEY
 ```
 
 No pongas secretos en `netlify.toml`.
@@ -157,6 +160,27 @@ POST /webhooks/whatsapp
 POST /chat/test
 GET  /tickets
 ```
+
+## Integracion con Proyecto_Final_DWJ
+
+Para que el bot cree tickets directamente en el backend de `Proyecto_Final_DWJ`:
+
+1. En `Proyecto_Final_DWJ/backend/.env`, configura:
+
+```env
+SERVICE_BOT_API_KEY=un_secreto_largo_compartido
+```
+
+2. En este bot, configura:
+
+```env
+SERVICE_DESK_API_URL=http://localhost:4000/api
+SERVICE_DESK_API_KEY=un_secreto_largo_compartido
+```
+
+En produccion, cambia `SERVICE_DESK_API_URL` por el dominio real del backend.
+Si esas variables no existen, el bot mantiene su comportamiento anterior y guarda tickets
+en SQLite local o Netlify Blobs.
 
 ## Produccion real con Meta
 

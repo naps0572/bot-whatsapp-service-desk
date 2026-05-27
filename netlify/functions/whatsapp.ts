@@ -37,9 +37,15 @@ async function handleMessage(message: IncomingMessage) {
   const decision = await processMessage(current, message.text);
 
   if (decision.ready_to_create) {
-    const ticket = await createTicket(message.user_id, decision.draft);
-    await clearDraft(message.user_id);
-    return `Ticket creado correctamente: ${ticket.external_id}\nPrioridad: ${decision.draft.priority}\nEl equipo de Service Desk revisará tu caso.`;
+    try {
+      const ticket = await createTicket(message.user_id, decision.draft);
+      await clearDraft(message.user_id);
+      return `Ticket creado correctamente: ${ticket.external_id}\nPrioridad: ${decision.draft.priority}\nEl equipo de Service Desk revisará tu caso.`;
+    } catch (error) {
+      console.error("[ServiceDesk]", error);
+      await saveDraft(message.user_id, decision.draft);
+      return "Ya tengo la información del ticket, pero no pude registrarlo en Service Desk en este momento. Intenta responder 'sí' de nuevo en unos minutos.";
+    }
   }
 
   await saveDraft(message.user_id, decision.draft);

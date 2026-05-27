@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
-from app.adapters.itsm import LocalTicketAdapter
+from app.adapters.itsm import LocalTicketAdapter, ServiceDeskTicketAdapter
 from app.config import get_settings
 from app.models import IncomingMessage
 from app.services.openrouter import OpenRouterClient
@@ -16,7 +16,11 @@ settings = get_settings()
 storage = Storage(settings.database_path)
 ai = OpenRouterClient(settings)
 flow = TicketFlow(ai)
-ticket_adapter = LocalTicketAdapter(storage)
+ticket_adapter = ServiceDeskTicketAdapter(
+    settings.service_desk_api_url,
+    settings.service_desk_api_key,
+    LocalTicketAdapter(storage),
+)
 whatsapp = WhatsAppSender(settings)
 
 app = FastAPI(title=settings.app_name)
@@ -81,13 +85,20 @@ async def _handle_message(message: IncomingMessage) -> str:
     decision = await flow.process(current, message.text)
 
     if decision.ready_to_create:
-        ticket = await ticket_adapter.create_ticket(message.user_id, decision.draft)
-        storage.clear_draft(message.user_id)
-        return (
-            f"Ticket creado correctamente: {ticket['external_id']}\n"
-            f"Prioridad: {decision.draft.priority}\n"
-            "El equipo de Service Desk revisará tu caso."
-        )
+        try:
+            ticket = await ticket_adapter.create_ticket(message.user_id, decision.draft)
+            storage.clear_draft(message.user_id)
+            return (
+                f"Ticket creado correctamente: {ticket['external_id']}\n"
+                f"Prioridad: {decision.draft.priority}\n"
+                "El equipo de Service Desk revisará tu caso."
+            )
+        except Exception:
+            storage.save_draft(message.user_id, decision.draft)
+            return (
+                "Ya tengo la información del ticket, pero no pude registrarlo en Service Desk "
+                "en este momento. Intenta responder 'sí' de nuevo en unos minutos."
+            )
 
     storage.save_draft(message.user_id, decision.draft)
     return decision.next_question or "Necesito un poco más de información para crear el ticket."
